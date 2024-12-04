@@ -1,0 +1,87 @@
+name: PRR Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_component:
+        description: 'Input component'
+        required: true
+        default: ''
+
+      input_component_id:
+        description: 'Input component ID'
+        required: true
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Create branch prr
+        run: git checkout -b prr
+      - name: Create branch prr if it does not exist, otherwise checkout
+        run: |
+          if git show-ref --quiet refs/heads/prr; then
+            git checkout prr
+          else
+            git checkout -b prr
+          fi
+      - name: Create directory .cai and file prr.md if they do not exist
+        run: |
+          if [ ! -d .cai ]; then
+            mkdir .cai
+          fi
+          if [ ! -f .cai/prr.md ]; then
+            touch .cai/prr.md
+          fi
+      - name: Check if .componentId exists and extract value, or create it
+        id: check_component_id
+        run: |
+            if [ -f .componentId ]; then
+              component_id=$(cat .componentId)
+              if [ "$component_id" != "${{ github.event.inputs.input_component_id }}" ]; then
+                echo "Error: input_component_id and component_id do not match"
+                exit 1
+              fi
+              echo "::set-output name=COMPONENT_ID::$component_id"
+            else
+              echo "${{ github.event.inputs.input_component_id }}" > .componentId
+              echo "::set-output name=COMPONENT_ID::${{ github.event.inputs.input_component_id }}"
+            fi
+      - name: Check if .component exists and extract value, or create it
+        id: check_component
+        run: |
+              if [ -f .component ]; then
+                component=$(cat .component)
+                if [ "$component" != "${{ github.event.inputs.input_component }}" ]; then
+                  echo "Error: input_component and component do not match"
+                  exit 1
+                fi
+                echo "::set-output name=COMPONENT::$component"
+              else
+                echo "${{ github.event.inputs.input_component }}" > .component
+                echo "::set-output name=COMPONENT::${{ github.event.inputs.input_component }}"
+              fi
+      - name: Call REST endpoint and store response
+        id: call_rest_endpoint
+        run: |
+          response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.AUTH }}" https://restcountries.com/v3.1/name/aruba?fullText=true)
+          http_code=${response: -3}
+          if [ "$http_code" -eq 200 ]; then
+            response_body=${response%???}
+            echo "::set-output name=RESPONSE::$response_body"
+          else
+            echo "Error: HTTP status code $http_code"
+            exit 1
+          fi
+      - name: Copy RESPONSE into .cai/prr.md
+        run: echo "${{ steps.call_rest_endpoint.outputs.RESPONSE }}" > .cai/prr.md
+      
+      - name: Commit and push changes
+        run: |
+          git add .
+          git commit -m "Update .cai/prr.md with REST API response"
+          git push origin prr
