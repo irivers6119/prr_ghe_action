@@ -1,16 +1,18 @@
 name: PRR Action
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       input_component:
         description: 'Input component'
         required: true
+        type: string
         default: ''
 
       input_component_id:
         description: 'Input component ID'
         required: true
+        type: string
         default: ''
 
 jobs:
